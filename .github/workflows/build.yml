@@ -1,0 +1,47 @@
+name: Build Kernel Module
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev zip
+
+    - name: Download Android NDK
+      run: |
+        wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
+        unzip -q android-ndk-r26b-linux.zip
+
+    - name: Download Kernel Source
+      run: |
+        # URL source kernel spes
+        git clone --depth 1 -b main-a16-sm8250-base https://github.com/muralivijay/kernel_xiaomi_spes.git kernel_source
+
+    - name: Prepare Kernel Headers
+      run: |
+        export PATH=$PATH:$GITHUB_WORKSPACE/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin
+        cd kernel_source
+        cp $GITHUB_WORKSPACE/config .config 
+        make ARCH=arm64 LLVM=1 CC=clang olddefconfig
+        make ARCH=arm64 LLVM=1 CC=clang modules_prepare
+
+    - name: Build Module
+      run: |
+        export PATH=$PATH:$GITHUB_WORKSPACE/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin
+        make -C kernel_source ARCH=arm64 LLVM=1 CC=clang M=$GITHUB_WORKSPACE modules
+
+    - name: Upload .ko Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nyx_hwmon
+        path: "*.ko"
