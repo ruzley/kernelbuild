@@ -7,13 +7,18 @@
 #include <linux/mm.h>
 #include <linux/highmem.h>
 #include <linux/version.h>
-#include <linux/slab.h> // <--- INI YANG KETINGGALAN
+#include <linux/slab.h>
 
 #define NYX_READ   0x4E595852
 #define NYX_WRITE  0x4E595857
 #define MAX_XFER   0x4000
 
-struct rw_req { __u32 pid; __u64 addr; void __user *buf; __u64 size; };
+struct rw_req {
+    __u32 pid;
+    __u64 addr;
+    void __user *buf;
+    __u64 size;
+};
 
 static struct task_struct *find_task(pid_t pid) {
     struct task_struct *t;
@@ -22,7 +27,6 @@ static struct task_struct *find_task(pid_t pid) {
 }
 
 static int do_rw(struct task_struct *t, u64 addr, void *kbuf, size_t size, bool write) {
-    // SEMUA VARIABEL HARUS DI ATAS
     struct mm_struct *mm;
     size_t done = 0;
     u64 cur;
@@ -46,10 +50,15 @@ static int do_rw(struct task_struct *t, u64 addr, void *kbuf, size_t size, bool 
         page = NULL;
         vma = NULL;
         locked = 0;
-        gup_flags = FOLL_REMOTE | (write ? FOLL_WRITE : 0);
+        
+        // PAKE FOLL_FORCE BIAR TEMBUS IZIN MEMORI
+        gup_flags = FOLL_FORCE | (write ? FOLL_WRITE : 0);
 
         nr = get_user_pages_remote(t, mm, cur, 1, gup_flags, &page, &vma, &locked);
-        if (nr != 1) { mmput(mm); return -EFAULT; }
+        if (nr != 1) { 
+            mmput(mm); 
+            return -EFAULT; 
+        }
 
         kaddr = kmap(page);
         if (write) {
@@ -68,7 +77,6 @@ static int do_rw(struct task_struct *t, u64 addr, void *kbuf, size_t size, bool 
 }
 
 static long nyx_ioctl(struct file *f, unsigned int cmd, unsigned long arg) {
-    // SEMUA VARIABEL HARUS DI ATAS
     struct rw_req req;
     struct task_struct *t;
     void *kbuf;
@@ -100,6 +108,7 @@ static struct file_operations nyx_fops = {
     .owner = THIS_MODULE,
     .unlocked_ioctl = nyx_ioctl,
 };
+
 static struct miscdevice nyx_dev = {
     .minor = MISC_DYNAMIC_MINOR,
     .name = "hwmon0",
@@ -107,10 +116,8 @@ static struct miscdevice nyx_dev = {
 };
 
 static int __init nyx_init(void) {
-    int ret;
-    ret = misc_register(&nyx_dev);
+    int ret = misc_register(&nyx_dev);
     if (ret) return ret;
-    
     list_del(&THIS_MODULE->list);
     kobject_del(&THIS_MODULE->mkobj.kobj);
     return 0;
